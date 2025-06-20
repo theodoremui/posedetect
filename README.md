@@ -19,22 +19,25 @@ A comprehensive, well-structured Python application for extracting human pose in
 - OpenPose library properly installed
 - OPENPOSEPATH environment variable pointing to your OpenPose installation
 
-## ⚠️ CRITICAL: Python Version Compatibility
+## Python Version Compatibility
 
 **Your OpenPose installation requires exactly Python 3.7** because the precompiled binaries are version-specific:
 
-- ✅ **Available**: `pyopenpose.cp37-win_amd64.pyd` (Python 3.7)
-- ❌ **Your Python**: 3.8.20 (incompatible)
-- 🎯 **Solution**: Use Python 3.7
+- **Available**: `pyopenpose.cp37-win_amd64.pyd` (Python 3.7)
+- **Your Python**: 3.8.20 (incompatible)
+- **Solution**: Use Python 3.7
 
-### 🚀 Quick Fix (5 minutes)
+### Python 3.7 Requirements
+
+The default OpenPose was developed on Python 3.7. The available Windows binary was created based on Python 3.7.
+
 
 1. **Download & Install Python 3.7.9**: 
    ```
    https://www.python.org/ftp/python/3.7.9/python-3.7.9-amd64.exe
    ```
-   ✅ Check "Add Python to PATH"  
-   ✅ You can keep your current Python 3.8
+   Check "Add Python to PATH"  
+   You can keep your current Python 3.8
 
 2. **Run the automated setup**:
    ```cmd
@@ -56,7 +59,7 @@ A comprehensive, well-structured Python application for extracting human pose in
    python quick_test.py
    ```
 
-### ✅ Verification
+### Verification
 
 After setup, you should see:
 ```
@@ -142,6 +145,15 @@ python -m posedetect.cli.main input.mp4 --extract-frames --frames-directory my_f
 
 # Combine frame extraction with other exports
 python -m posedetect.cli.main input.mp4 --export-all-formats --extract-frames --frame-range 0:100
+
+# Extract comprehensive frame sets (raw + overlay frames to separate directories)
+python -m posedetect.cli.main input.mp4 --extract-comprehensive-frames
+
+# Comprehensive extraction with custom configuration
+python -m posedetect.cli.main input.mp4 --extract-comprehensive-frames --frame-extraction-config config.json
+
+# Comprehensive extraction with frame range
+python -m posedetect.cli.main input.mp4 --extract-comprehensive-frames --frame-range 0:50
 ```
 
 ### Command Line Options
@@ -197,7 +209,122 @@ optional arguments:
                         Frame range to extract (format: start:end, e.g., 10:50)
   --frames-directory FRAMES_DIRECTORY
                         Directory to save extracted frame images (default: {output_name}_frames)
+  --extract-comprehensive-frames
+                        Extract both raw frames and overlay frames to separate directories (for video inputs only)
+  --frame-extraction-config FRAME_EXTRACTION_CONFIG
+                        JSON file with frame extraction configuration
 ```
+
+## Comprehensive Frame Extraction
+
+The comprehensive frame extraction feature creates **two separate sets of outputs** for detailed analysis:
+
+### 🎯 Output Structure
+
+```
+outputs/
+├── pose_video_20250619_131354.json         # Pose detection data
+├── pose_video_20250619_131354.csv          # CSV export
+├── frames_video_20250619_131354/           # 📁 Raw frames directory
+│   ├── frame_00000.jpg                     # Unprocessed frame 0
+│   ├── frame_00001.jpg                     # Unprocessed frame 1
+│   ├── frame_00002.jpg                     # Unprocessed frame 2
+│   └── ...
+├── overlay_video_20250619_131354/          # 📁 Overlay frames directory
+│   ├── frame_00000.jpg                     # Frame 0 with pose overlays
+│   ├── frame_00001.jpg                     # Frame 1 with pose overlays
+│   ├── frame_00002.jpg                     # Frame 2 with pose overlays
+│   └── ...
+└── video_overlay_20250619_131354.mp4       # Video overlay (if requested)
+```
+
+### 🔧 Configuration Options
+
+Create a frame extraction configuration file (`frame_config.json`):
+
+```json
+{
+    "base_output_directory": "outputs",
+    "directory_name_template": "{type}_{video_name}_{timestamp}",
+    "frame_filename_template": "frame_{:05d}.{extension}",
+    
+    "extract_raw_frames": true,
+    "raw_image_format": "jpg",
+    "raw_image_quality": 95,
+    "raw_resize_factor": null,
+    
+    "extract_overlay_frames": true,
+    "overlay_image_format": "jpg", 
+    "overlay_image_quality": 95,
+    "overlay_resize_factor": null,
+    
+    "skeleton_color": [0, 255, 0],
+    "joint_color": [255, 0, 0],
+    "confidence_threshold": 0.1,
+    "line_thickness": 2,
+    "joint_radius": 4,
+    "show_confidence": true,
+    "show_person_id": true,
+    "font_scale": 0.5,
+    "font_color": [255, 255, 255],
+    
+    "frame_range": null,
+    "frame_skip": 1,
+    "enable_progress_callback": true,
+    "log_extraction_details": true
+}
+```
+
+### 📋 Use Cases
+
+**Raw Frames Directory** (`frames_video_timestamp/`):
+- 🔬 **Research & Analysis**: Unmodified frames for computer vision research
+- 🎨 **Custom Processing**: Apply your own filters, annotations, or analyses
+- 📊 **Dataset Creation**: Generate training/testing datasets
+- 🔍 **Quality Control**: Manual inspection of original video content
+
+**Overlay Frames Directory** (`overlay_video_timestamp/`):
+- 📈 **Presentations**: High-quality individual frames for slides and reports
+- 🎯 **Pose Analysis**: Frame-by-frame examination of pose detection results
+- 🎬 **Documentation**: Create documentation with specific pose examples
+- 🔧 **Debugging**: Verify pose detection accuracy on individual frames
+
+### 🚀 Performance Features
+
+- **Parallel Processing**: Raw and overlay extraction can run simultaneously
+- **Memory Efficient**: Frame-by-frame processing without loading entire video
+- **Progress Tracking**: Real-time progress updates for long videos
+- **Error Isolation**: Individual frame failures don't stop the entire process
+- **Configurable Quality**: Independent quality settings for raw vs overlay frames
+
+### 💡 Example Workflows
+
+**Research Workflow**:
+```bash
+# Extract high-quality raw frames for analysis
+python src/video2pose.py research_video.mp4 \
+    --extract-comprehensive-frames \
+    --frame-extraction-config research_config.json \
+    --frame-range 0:1000
+```
+
+**Presentation Workflow**:
+```bash
+# Extract specific frames with overlays for presentation
+python src/video2pose.py presentation_video.mp4 \
+    --extract-comprehensive-frames \
+    --frame-range 50:100
+```
+
+**Quality Control Workflow**:
+```bash
+# Extract every 10th frame for quick review
+python src/video2pose.py long_video.mp4 \
+    --extract-comprehensive-frames \
+    --frame-extraction-config quick_review_config.json
+```
+
+Where `quick_review_config.json` includes `"frame_skip": 10`.
 
 ## Output Format
 
@@ -564,7 +691,7 @@ source ~/.bashrc
 
 ## License
 
-[Add your license information here]
+MIT License
 
 ## Acknowledgments
 

@@ -22,6 +22,7 @@ from ..utils.output_manager import OutputManager
 from ..utils.logging_config import setup_logging
 from ..exporters.csv_exporter import CSVFormat
 from ..video.overlay_generator import OverlayConfig
+from ..video.frame_extraction import FrameExtractionConfig
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -214,6 +215,18 @@ Examples:
         help="Directory to save extracted frame images (default: {output_name}_frames)"
     )
     
+    parser.add_argument(
+        "--extract-comprehensive-frames",
+        action="store_true",
+        help="Extract both raw frames and overlay frames to separate directories (for video inputs only)"
+    )
+    
+    parser.add_argument(
+        "--frame-extraction-config",
+        type=str,
+        help="JSON file with frame extraction configuration"
+    )
+    
     return parser
 
 
@@ -247,6 +260,37 @@ def load_overlay_config(config_path: Optional[str]) -> Optional[OverlayConfig]:
         
     except (json.JSONDecodeError, TypeError) as e:
         raise ValueError(f"Invalid overlay config file: {e}")
+
+
+def load_frame_extraction_config(config_path: Optional[str]) -> Optional[FrameExtractionConfig]:
+    """
+    Load frame extraction configuration from JSON file.
+    
+    Args:
+        config_path: Path to JSON configuration file
+        
+    Returns:
+        FrameExtractionConfig object or None if no config provided
+        
+    Raises:
+        ValueError: If config file is invalid
+    """
+    if not config_path:
+        return None
+    
+    config_file = Path(config_path)
+    if not config_file.exists():
+        raise ValueError(f"Frame extraction config file not found: {config_path}")
+    
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+        
+        # Convert dict to FrameExtractionConfig
+        return FrameExtractionConfig(**config_data)
+        
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ValueError(f"Invalid frame extraction config file: {e}")
 
 
 def get_csv_formats(csv_format_arg: str) -> list:
@@ -364,6 +408,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("--overlay-video can only be used with video inputs")
         if args.extract_frames:
             raise ValueError("--extract-frames can only be used with video inputs")
+        if getattr(args, 'extract_comprehensive_frames', False):
+            raise ValueError("--extract-comprehensive-frames can only be used with video inputs")
     elif FileHandler.is_video_file(input_path):
         if args.overlay_image:
             raise ValueError("--overlay-image can only be used with image inputs")
@@ -544,13 +590,20 @@ def process_video(args: argparse.Namespace) -> None:
         if hasattr(args, 'frame_range') and args.frame_range:
             frame_range = parse_frame_range(args.frame_range)
         
+        # Load frame extraction configuration if provided
+        frame_config = None
+        if hasattr(args, 'frame_extraction_config') and args.frame_extraction_config:
+            frame_config = load_frame_extraction_config(args.frame_extraction_config)
+        
         exported_files = output_manager.export_all_formats(
             input_file=str(args.input_path),
             processing_metadata=processing_metadata,
             include_csv=True,
             include_video=True,  # Enable video overlay for videos
             include_frames=getattr(args, 'extract_frames', False),
+            include_comprehensive_frames=getattr(args, 'extract_comprehensive_frames', False),
             overlay_config=overlay_config,
+            frame_config=frame_config,
             frame_range=frame_range,
             progress_callback=progress_callback
         )
@@ -611,6 +664,36 @@ def process_video(args: argparse.Namespace) -> None:
                 progress_callback=frame_progress_callback
             )
             logger.info(f"Extracted {len(frame_files)} frame overlay images")
+        
+        # Extract comprehensive frames if requested
+        if getattr(args, 'extract_comprehensive_frames', False):
+            logger.info("Extracting comprehensive frame sets (raw + overlay)...")
+            
+            # Load frame extraction configuration if provided
+            frame_config = None
+            if hasattr(args, 'frame_extraction_config') and args.frame_extraction_config:
+                frame_config = load_frame_extraction_config(args.frame_extraction_config)
+            
+            # Parse frame range if specified
+            frame_range = None
+            if hasattr(args, 'frame_range') and args.frame_range:
+                frame_range = parse_frame_range(args.frame_range)
+            
+            def comprehensive_progress_callback(progress: float, frame: int, total: int, phase: str = "frames"):
+                logger.info(f"Comprehensive {phase} extraction progress: {progress:.1%} ({frame}/{total})")
+            
+            comprehensive_results = output_manager.generate_comprehensive_frame_extractions(
+                frame_config=frame_config,
+                progress_callback=comprehensive_progress_callback
+            )
+            
+            summary = comprehensive_results.get('summary', {})
+            logger.info(f"Comprehensive extraction complete:")
+            logger.info(f"  Raw frames: {summary.get('total_raw_frames', 0)}")
+            logger.info(f"  Overlay frames: {summary.get('total_overlay_frames', 0)}")
+            
+            for extraction_type, directory_path in summary.get('output_directories', {}).items():
+                logger.info(f"  {extraction_type.title()} directory: {directory_path}")
 
 
 def main() -> int:

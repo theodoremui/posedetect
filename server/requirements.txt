@@ -1,0 +1,8 @@
+# Legacy requirements.txt for backwards compatibility
+# For modern dependency management, use: uv sync
+# See SETUP.md for installation instructions
+
+# This file is auto-generated from pyproject.toml dependencies
+# To update dependencies, modify pyproject.toml and run: uv lock
+
+-e . 
