@@ -35,8 +35,12 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-node_modules
-**/node_modules
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+cache/
+**/cache/
 .Python
 build/
 develop-eggs/
