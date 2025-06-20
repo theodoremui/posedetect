@@ -1,0 +1,30 @@
+{
+    "base_output_directory": "outputs",
+    "directory_name_template": "{type}_{video_name}_{timestamp}",
+    "frame_filename_template": "frame_{:05d}.{extension}",
+    
+    "extract_raw_frames": true,
+    "raw_image_format": "jpg",
+    "raw_image_quality": 95,
+    "raw_resize_factor": null,
+    
+    "extract_overlay_frames": true,
+    "overlay_image_format": "jpg", 
+    "overlay_image_quality": 95,
+    "overlay_resize_factor": null,
+    
+    "skeleton_color": [0, 255, 0],
+    "joint_color": [255, 0, 0],
+    "confidence_threshold": 0.1,
+    "line_thickness": 2,
+    "joint_radius": 4,
+    "show_confidence": true,
+    "show_person_id": true,
+    "font_scale": 0.5,
+    "font_color": [255, 255, 255],
+    
+    "frame_range": null,
+    "frame_skip": 1,
+    "enable_progress_callback": true,
+    "log_extraction_details": true
+}
