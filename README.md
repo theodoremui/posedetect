@@ -691,7 +691,7 @@ source ~/.bashrc
 
 ## License
 
-[Add your license information here]
+MIT License
 
 ## Acknowledgments
 
