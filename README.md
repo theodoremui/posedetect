@@ -6,12 +6,14 @@ A comprehensive, well-structured Python application for extracting human pose in
 
 - **Multi-format Support**: Process both video files (MP4, AVI, MOV, etc.) and image files (JPG, PNG, BMP, etc.)
 - **OpenPose Integration**: Seamless integration with OpenPose for accurate human pose detection
+- **Automatic Frame Extraction**: For every video input, automatically creates both raw frames and overlay frames directories
 - **Comprehensive Output**: JSON and CSV export formats with detailed metadata
 - **Visualization**: Create overlay videos and images with pose annotations
 - **Robust Architecture**: Built following SOLID principles with proper separation of concerns
 - **Extensive Testing**: Comprehensive test suite with pytest for reliability
 - **Rich Logging**: Configurable logging with loguru for debugging and monitoring
 - **CLI Interface**: User-friendly command-line interface with extensive configuration options
+- **Timestamped Outputs**: All outputs are automatically timestamped for easy organization
 
 ## Prerequisites
 
@@ -98,10 +100,14 @@ pip install -e ".[dev]"
 
 ### Basic Usage
 
-Process a video file (automatically generates timestamped JSON and CSV files):
+Process a video file (automatically generates timestamped JSON, CSV files, and frame extraction directories):
 ```bash
 python -m posedetect.cli.main input_video.mp4 --output outputs/poses.json
-# Generates: outputs/poses_20250619_140615.json and outputs/poses_20250619_140615.csv
+# Generates:
+# - outputs/poses_20250619_140615.json (pose data)
+# - outputs/poses_20250619_140615.csv (CSV export)
+# - outputs/frames_input_video_20250619_140615/ (raw video frames)
+# - outputs/overlay_input_video_20250619_140615/ (frames with pose overlays)
 ```
 
 Process an image file (automatically generates timestamped JSON and CSV files):
@@ -146,14 +152,15 @@ python -m posedetect.cli.main input.mp4 --extract-frames --frames-directory my_f
 # Combine frame extraction with other exports
 python -m posedetect.cli.main input.mp4 --export-all-formats --extract-frames --frame-range 0:100
 
-# Extract comprehensive frame sets (raw + overlay frames to separate directories)
-python -m posedetect.cli.main input.mp4 --extract-comprehensive-frames
+# Frame extraction happens automatically for all videos!
+# To customize frame extraction, use configuration file
+python -m posedetect.cli.main input.mp4 --frame-extraction-config config.json
 
-# Comprehensive extraction with custom configuration
-python -m posedetect.cli.main input.mp4 --extract-comprehensive-frames --frame-extraction-config config.json
+# Extract only specific frame range
+python -m posedetect.cli.main input.mp4 --frame-range 0:50
 
-# Comprehensive extraction with frame range
-python -m posedetect.cli.main input.mp4 --extract-comprehensive-frames --frame-range 0:50
+# Extract additional individual frame images (beyond automatic extraction)
+python -m posedetect.cli.main input.mp4 --extract-frames --frames-directory custom_frames/
 ```
 
 ### Command Line Options
@@ -204,38 +211,39 @@ optional arguments:
   --log-file LOG_FILE   Log to file (in addition to console)
   --verbose, -v         Enable verbose logging
   --export-csv          Also export results to CSV format
-  --extract-frames      Extract individual frame images with pose overlays (for video inputs only)
+  --extract-frames      Extract additional individual frame images beyond automatic extraction (for video inputs only)
   --frame-range FRAME_RANGE
                         Frame range to extract (format: start:end, e.g., 10:50)
   --frames-directory FRAMES_DIRECTORY
-                        Directory to save extracted frame images (default: {output_name}_frames)
-  --extract-comprehensive-frames
-                        Extract both raw frames and overlay frames to separate directories (for video inputs only)
+                        Directory to save additional extracted frame images
   --frame-extraction-config FRAME_EXTRACTION_CONFIG
                         JSON file with frame extraction configuration
+
+Note: For video inputs, raw frames and overlay frames are AUTOMATICALLY extracted to timestamped directories.
+Additional frame extraction options are provided for custom workflows.
 ```
 
-## Comprehensive Frame Extraction
+## Automatic Frame Extraction (Video Inputs)
 
-The comprehensive frame extraction feature creates **two separate sets of outputs** for detailed analysis:
+For every video input, PoseDetect **automatically creates two separate sets of frame outputs** for comprehensive analysis:
 
 ### 🎯 Output Structure
 
 ```
 outputs/
-├── pose_video_20250619_131354.json         # Pose detection data
-├── pose_video_20250619_131354.csv          # CSV export
-├── frames_video_20250619_131354/           # 📁 Raw frames directory
+├── poses_20250619_131354.json              # Pose detection data
+├── poses_20250619_131354.csv               # CSV export
+├── frames_video_20250619_131354/           # 📁 Raw frames directory (automatic)
 │   ├── frame_00000.jpg                     # Unprocessed frame 0
 │   ├── frame_00001.jpg                     # Unprocessed frame 1
 │   ├── frame_00002.jpg                     # Unprocessed frame 2
 │   └── ...
-├── overlay_video_20250619_131354/          # 📁 Overlay frames directory
+├── overlay_video_20250619_131354/          # 📁 Overlay frames directory (automatic)
 │   ├── frame_00000.jpg                     # Frame 0 with pose overlays
 │   ├── frame_00001.jpg                     # Frame 1 with pose overlays
 │   ├── frame_00002.jpg                     # Frame 2 with pose overlays
 │   └── ...
-└── video_overlay_20250619_131354.mp4       # Video overlay (if requested)
+└── video_overlay_20250619_131354.mp4       # Video overlay (if --overlay-video specified)
 ```
 
 ### 🔧 Configuration Options

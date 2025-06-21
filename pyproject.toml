@@ -10,7 +10,6 @@ dependencies = [
     "opencv-python>=4.8.0",
     "numpy>=1.19.0,<1.22.0",
     "Pillow>=8.0.0,<9.0.0",
-    "mediapipe>=0.8.0,<0.11.0",  # CPU-friendly pose detection alternative
 ]
 
 [project.optional-dependencies]

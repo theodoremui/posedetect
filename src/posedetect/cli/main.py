@@ -163,12 +163,7 @@ Examples:
         help="Run OpenPose diagnostics and exit"
     )
     
-    parser.add_argument(
-        "--detector",
-        choices=["openpose", "mediapipe"],
-        default="openpose",
-        help="Pose detection engine to use (default: openpose)"
-    )
+
     
     # Export options
     parser.add_argument(
@@ -446,27 +441,19 @@ def process_image(args: argparse.Namespace) -> None:
     image = VideoProcessor.load_image(args.input_path)
     logger.info(f"Image loaded: {image.shape[1]}x{image.shape[0]} pixels")
     
-    # Initialize detector based on selected engine
-    if args.detector == "mediapipe":
-        from ..core.mediapipe_detector import MediaPipePoseDetector
-        detector = MediaPipePoseDetector(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-            model_complexity=1
-        )
-    else:  # openpose
-        detector = PoseDetector(
-            model_folder=args.model_folder,
-            net_resolution=args.net_resolution,
-            model_pose=args.model_pose,
-            scale_number=args.scale_number,
-            scale_gap=args.scale_gap
-        )
+    # Initialize OpenPose detector
+    detector = PoseDetector(
+        model_folder=args.model_folder,
+        net_resolution=args.net_resolution,
+        model_pose=args.model_pose,
+        scale_number=args.scale_number,
+        scale_gap=args.scale_gap
+    )
     
     # Detect poses
     with detector:
         poses = detector.detect_poses_in_image(image)
-        logger.info(f"Detected {len(poses)} poses in image using {args.detector}")
+        logger.info(f"Detected {len(poses)} poses in image using OpenPose")
     
     # Generate timestamped output paths
     base_output_path = FileHandler.ensure_output_directory(args.output)
@@ -533,27 +520,19 @@ def process_video(args: argparse.Namespace) -> None:
     """
     logger.info(f"Processing video: {args.input_path}")
     
-    # Initialize detector based on selected engine
-    if args.detector == "mediapipe":
-        from ..core.mediapipe_detector import MediaPipePoseDetector
-        detector = MediaPipePoseDetector(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-            model_complexity=1
-        )
-    else:  # openpose
-        detector = PoseDetector(
-            model_folder=args.model_folder,
-            net_resolution=args.net_resolution,
-            model_pose=args.model_pose,
-            scale_number=args.scale_number,
-            scale_gap=args.scale_gap
-        )
+    # Initialize OpenPose detector
+    detector = PoseDetector(
+        model_folder=args.model_folder,
+        net_resolution=args.net_resolution,
+        model_pose=args.model_pose,
+        scale_number=args.scale_number,
+        scale_gap=args.scale_gap
+    )
     
     # Process video
     with detector:
         poses = detector.detect_poses_in_video(args.input_path)
-        logger.info(f"Detected {len(poses)} total poses in video using {args.detector}")
+        logger.info(f"Detected {len(poses)} total poses in video using OpenPose")
     
     # Get video metadata for processing info
     with VideoProcessor(args.input_path) as video_proc:
@@ -579,21 +558,58 @@ def process_video(args: argparse.Namespace) -> None:
     # Load overlay configuration if provided
     overlay_config = load_overlay_config(args.overlay_config)
     
+    # Parse frame range if specified for all operations
+    frame_range = None
+    if hasattr(args, 'frame_range') and args.frame_range:
+        frame_range = parse_frame_range(args.frame_range)
+    
+    # Load frame extraction configuration if provided
+    frame_config = None
+    if hasattr(args, 'frame_extraction_config') and args.frame_extraction_config:
+        frame_config = load_frame_extraction_config(args.frame_extraction_config)
+    
+    # Always export JSON and CSV by default
+    output_manager.save_json(str(args.input_path), processing_metadata)
+    
+    # Always generate CSV with normalized format by default
+    output_manager.export_csv_advanced(csv_path=csv_output_path, format_type=CSVFormat.NORMALIZED)
+    
+    # Export additional CSV formats if requested
+    if args.export_csv:
+        csv_formats = get_csv_formats(args.csv_format)
+        for csv_format in csv_formats:
+            if csv_format != CSVFormat.NORMALIZED:  # Don't duplicate normalized
+                additional_csv_path = generate_timestamped_output_path(str(base_output_path), f"_{csv_format.value}.csv")
+                output_manager.export_csv_advanced(csv_path=additional_csv_path, format_type=csv_format)
+    
+    # ALWAYS extract both raw frames and overlay frames for video inputs
+    logger.info("Extracting raw frames and overlay frames (automatic for all video inputs)...")
+    
+    def comprehensive_progress_callback(progress: float, frame: int, total: int, phase: str = "frames"):
+        logger.info(f"{phase.title()} extraction progress: {progress:.1%} ({frame}/{total})")
+    
+    try:
+        comprehensive_results = output_manager.generate_comprehensive_frame_extractions(
+            frame_config=frame_config,
+            progress_callback=comprehensive_progress_callback
+        )
+        
+        summary = comprehensive_results.get('summary', {})
+        logger.info(f"Frame extraction complete:")
+        logger.info(f"  Raw frames: {summary.get('total_raw_frames', 0)}")
+        logger.info(f"  Overlay frames: {summary.get('total_overlay_frames', 0)}")
+        
+        for extraction_type, directory_path in summary.get('output_directories', {}).items():
+            logger.info(f"  {extraction_type.title()} directory: {directory_path}")
+    
+    except Exception as e:
+        logger.warning(f"Frame extraction failed (continuing with other outputs): {e}")
+    
     # Export in all formats if requested
     if args.export_all_formats:
         # Define progress callback for video overlay
         def progress_callback(progress: float, frame: int, total: int):
             logger.info(f"Video overlay progress: {progress:.1%} ({frame}/{total})")
-        
-        # Parse frame range if specified
-        frame_range = None
-        if hasattr(args, 'frame_range') and args.frame_range:
-            frame_range = parse_frame_range(args.frame_range)
-        
-        # Load frame extraction configuration if provided
-        frame_config = None
-        if hasattr(args, 'frame_extraction_config') and args.frame_extraction_config:
-            frame_config = load_frame_extraction_config(args.frame_extraction_config)
         
         exported_files = output_manager.export_all_formats(
             input_file=str(args.input_path),
@@ -601,99 +617,50 @@ def process_video(args: argparse.Namespace) -> None:
             include_csv=True,
             include_video=True,  # Enable video overlay for videos
             include_frames=getattr(args, 'extract_frames', False),
-            include_comprehensive_frames=getattr(args, 'extract_comprehensive_frames', False),
+            include_comprehensive_frames=False,  # Already done above
             overlay_config=overlay_config,
             frame_config=frame_config,
             frame_range=frame_range,
             progress_callback=progress_callback
         )
         logger.info(f"Exported to multiple formats: {list(exported_files.keys())}")
-    else:
-        # Always export JSON and CSV by default
-        output_manager.save_json(str(args.input_path), processing_metadata)
+    
+    # Create overlay video if requested using new system
+    if args.overlay_video:
+        logger.info(f"Creating overlay video: {args.overlay_video}")
         
-        # Always generate CSV with normalized format by default
-        output_manager.export_csv_advanced(csv_path=csv_output_path, format_type=CSVFormat.NORMALIZED)
+        def progress_callback(progress: float, frame: int, total: int):
+            logger.info(f"Video overlay progress: {progress:.1%} ({frame}/{total})")
         
-        # Export additional CSV formats if requested
-        if args.export_csv:
-            csv_formats = get_csv_formats(args.csv_format)
-            for csv_format in csv_formats:
-                if csv_format != CSVFormat.NORMALIZED:  # Don't duplicate normalized
-                    additional_csv_path = generate_timestamped_output_path(str(base_output_path), f"_{csv_format.value}.csv")
-                    output_manager.export_csv_advanced(csv_path=additional_csv_path, format_type=csv_format)
+        # Generate timestamped overlay video path
+        overlay_video_path = generate_timestamped_output_path(args.overlay_video, ".mp4")
         
-        # Create overlay video if requested using new system
-        if args.overlay_video:
-            logger.info(f"Creating overlay video: {args.overlay_video}")
-            
-            def progress_callback(progress: float, frame: int, total: int):
-                logger.info(f"Video overlay progress: {progress:.1%} ({frame}/{total})")
-            
-            # Generate timestamped overlay video path
-            overlay_video_path = generate_timestamped_output_path(args.overlay_video, ".mp4")
-            
-            overlay_path = output_manager.generate_overlay_video(
-                output_video_path=overlay_video_path,
-                config=overlay_config,
-                progress_callback=progress_callback
-            )
-            logger.info(f"Overlay video saved: {overlay_path}")
+        overlay_path = output_manager.generate_overlay_video(
+            output_video_path=overlay_video_path,
+            config=overlay_config,
+            progress_callback=progress_callback
+        )
+        logger.info(f"Overlay video saved: {overlay_path}")
+    
+    # Extract additional individual frame images if specifically requested
+    if getattr(args, 'extract_frames', False):
+        logger.info("Extracting additional individual frame overlay images...")
         
-        # Extract individual frame images if requested
-        if getattr(args, 'extract_frames', False):
-            logger.info("Extracting individual frame overlay images...")
-            
-            # Parse frame range if specified
-            frame_range = None
-            if hasattr(args, 'frame_range') and args.frame_range:
-                frame_range = parse_frame_range(args.frame_range)
-            
-            # Determine output directory for frames
-            frames_directory = None
-            if hasattr(args, 'frames_directory') and args.frames_directory:
-                frames_directory = Path(args.frames_directory)
-            
-            def frame_progress_callback(progress: float, frame: int, total: int):
-                logger.info(f"Frame extraction progress: {progress:.1%} ({frame}/{total})")
-            
-            frame_files = output_manager.generate_frame_overlays(
-                output_frames_directory=frames_directory,
-                config=overlay_config,
-                frame_range=frame_range,
-                progress_callback=frame_progress_callback
-            )
-            logger.info(f"Extracted {len(frame_files)} frame overlay images")
+        # Determine output directory for frames
+        frames_directory = None
+        if hasattr(args, 'frames_directory') and args.frames_directory:
+            frames_directory = Path(args.frames_directory)
         
-        # Extract comprehensive frames if requested
-        if getattr(args, 'extract_comprehensive_frames', False):
-            logger.info("Extracting comprehensive frame sets (raw + overlay)...")
-            
-            # Load frame extraction configuration if provided
-            frame_config = None
-            if hasattr(args, 'frame_extraction_config') and args.frame_extraction_config:
-                frame_config = load_frame_extraction_config(args.frame_extraction_config)
-            
-            # Parse frame range if specified
-            frame_range = None
-            if hasattr(args, 'frame_range') and args.frame_range:
-                frame_range = parse_frame_range(args.frame_range)
-            
-            def comprehensive_progress_callback(progress: float, frame: int, total: int, phase: str = "frames"):
-                logger.info(f"Comprehensive {phase} extraction progress: {progress:.1%} ({frame}/{total})")
-            
-            comprehensive_results = output_manager.generate_comprehensive_frame_extractions(
-                frame_config=frame_config,
-                progress_callback=comprehensive_progress_callback
-            )
-            
-            summary = comprehensive_results.get('summary', {})
-            logger.info(f"Comprehensive extraction complete:")
-            logger.info(f"  Raw frames: {summary.get('total_raw_frames', 0)}")
-            logger.info(f"  Overlay frames: {summary.get('total_overlay_frames', 0)}")
-            
-            for extraction_type, directory_path in summary.get('output_directories', {}).items():
-                logger.info(f"  {extraction_type.title()} directory: {directory_path}")
+        def frame_progress_callback(progress: float, frame: int, total: int):
+            logger.info(f"Additional frame extraction progress: {progress:.1%} ({frame}/{total})")
+        
+        frame_files = output_manager.generate_frame_overlays(
+            output_frames_directory=frames_directory,
+            config=overlay_config,
+            frame_range=frame_range,
+            progress_callback=frame_progress_callback
+        )
+        logger.info(f"Extracted {len(frame_files)} additional frame overlay images")
 
 
 def main() -> int:
