@@ -17,68 +17,19 @@ A comprehensive, well-structured Python application for extracting human pose in
 
 ## Prerequisites
 
-- **Python 3.7** (specific version required for OpenPose compatibility)
+- **Python 3.7+** (OpenPose compatibility may require specific versions depending on your installation)
 - OpenPose library properly installed
 - OPENPOSEPATH environment variable pointing to your OpenPose installation
 
-## Python Version Compatibility
+## Installation
 
-**Your OpenPose installation requires exactly Python 3.7** because the precompiled binaries are version-specific:
-
-- **Available**: `pyopenpose.cp37-win_amd64.pyd` (Python 3.7)
-- **Your Python**: 3.8.20 (incompatible)
-- **Solution**: Use Python 3.7
-
-### Python 3.7 Requirements
-
-The default OpenPose was developed on Python 3.7. The available Windows binary was created based on Python 3.7.
-
-
-1. **Download & Install Python 3.7.9**: 
-   ```
-   https://www.python.org/ftp/python/3.7.9/python-3.7.9-amd64.exe
-   ```
-   Check "Add Python to PATH"  
-   You can keep your current Python 3.8
-
-2. **Run the automated setup**:
-   ```cmd
-   setup_python37_fixed.bat
-   ```
-
-3. **Or manual setup**:
-   ```cmd
-   # Create Python 3.7 environment
-   py -3.7 -m venv .venv37
-   
-   # Activate it  
-   .venv37\Scripts\activate.bat
-   
-   # Install dependencies
-   pip install -e .
-   
-   # Test OpenPose
-   python quick_test.py
-   ```
-
-### Verification
-
-After setup, you should see:
-```
-🐍 Python 3.7.9
-📁 OPENPOSEPATH: C:\Users\...\openpose
-✅ pyopenpose imported successfully!
-✅ WrapperPython created!
-🎉 OpenPose is working correctly!
-```
-
-### OpenPose Installation
+### OpenPose Setup
 
 1. Install OpenPose following the [official installation guide](https://github.com/CMU-Perceptual-Computing-Lab/openpose)
 2. Set the `OPENPOSEPATH` environment variable to point to your OpenPose installation directory
 3. Ensure OpenPose Python bindings are properly compiled and accessible
 
-## Installation
+### Package Installation
 
 1. Clone the repository:
 ```bash
@@ -102,7 +53,7 @@ pip install -e ".[dev]"
 
 Process a video file (automatically generates timestamped JSON, CSV files, and frame extraction directories):
 ```bash
-python -m posedetect.cli.main input_video.mp4 --output outputs/poses.json
+python src/video2pose.py input_video.mp4 --output outputs/poses.json
 # Generates:
 # - outputs/poses_20250619_140615.json (pose data)
 # - outputs/poses_20250619_140615.csv (CSV export)
@@ -112,7 +63,7 @@ python -m posedetect.cli.main input_video.mp4 --output outputs/poses.json
 
 Process an image file (automatically generates timestamped JSON and CSV files):
 ```bash
-python -m posedetect.cli.main input_image.jpg --output outputs/poses.json
+python src/video2pose.py input_image.jpg --output outputs/poses.json
 # Generates: outputs/poses_20250619_140732.json and outputs/poses_20250619_140732.csv
 ```
 
@@ -120,47 +71,46 @@ python -m posedetect.cli.main input_image.jpg --output outputs/poses.json
 
 ```bash
 # Custom output location (JSON and CSV automatically generated with timestamps)
-python -m posedetect.cli.main input.mp4 --output results/poses.json
+python src/video2pose.py input.mp4 --output results/poses.json
 
 # Create overlay video with poses
-python -m posedetect.cli.main input.mp4 --overlay-video output_with_poses.mp4
+python src/video2pose.py input.mp4 --overlay-video output_with_poses.mp4
 
 # Export all formats (JSON, all CSV variants, and video overlay)
-python -m posedetect.cli.main input.mp4 --export-all-formats
+python src/video2pose.py input.mp4 --export-all-formats
 
 # Export additional CSV formats (normalized is always generated)
-python -m posedetect.cli.main input.mp4 --export-csv --csv-format all
+python src/video2pose.py input.mp4 --export-csv --csv-format all
 
 # Custom OpenPose configuration
-python -m posedetect.cli.main input.mp4 --net-resolution 656x368 --model-pose COCO
+python src/video2pose.py input.mp4 --net-resolution 656x368 --model-pose COCO
 
 # Verbose logging with custom confidence threshold
-python -m posedetect.cli.main input.mp4 --verbose --confidence-threshold 0.5
+python src/video2pose.py input.mp4 --verbose --confidence-threshold 0.5
 
 # Custom overlay configuration
-python -m posedetect.cli.main input.mp4 --overlay-video output.mp4 --overlay-config config.json
+python src/video2pose.py input.mp4 --overlay-video output.mp4 --overlay-config config.json
 
 # Extract individual frame images with pose overlays (video inputs only)
-python -m posedetect.cli.main input.mp4 --extract-frames
+python src/video2pose.py input.mp4 --extract-frames
 
 # Extract specific frame range (frames 10-50)
-python -m posedetect.cli.main input.mp4 --extract-frames --frame-range 10:50
+python src/video2pose.py input.mp4 --extract-frames --frame-range 10:50
 
 # Specify custom directory for extracted frames
-python -m posedetect.cli.main input.mp4 --extract-frames --frames-directory my_frames/
+python src/video2pose.py input.mp4 --extract-frames --frames-directory my_frames/
 
 # Combine frame extraction with other exports
-python -m posedetect.cli.main input.mp4 --export-all-formats --extract-frames --frame-range 0:100
+python src/video2pose.py input.mp4 --export-all-formats --extract-frames --frame-range 0:100
 
-# Frame extraction happens automatically for all videos!
-# To customize frame extraction, use configuration file
-python -m posedetect.cli.main input.mp4 --frame-extraction-config config.json
+# Extract comprehensive frames (both raw and overlay) to separate directories
+python src/video2pose.py input.mp4 --extract-comprehensive-frames
 
 # Extract only specific frame range
-python -m posedetect.cli.main input.mp4 --frame-range 0:50
+python src/video2pose.py input.mp4 --frame-range 0:50
 
 # Extract additional individual frame images (beyond automatic extraction)
-python -m posedetect.cli.main input.mp4 --extract-frames --frames-directory custom_frames/
+python src/video2pose.py input.mp4 --extract-frames --frames-directory custom_frames/
 ```
 
 ### Command Line Options
@@ -173,7 +123,10 @@ usage: video2pose.py [-h] [--output OUTPUT] [--overlay-video OVERLAY_VIDEO]
                      [--confidence-threshold CONFIDENCE_THRESHOLD] [--show-confidence]
                      [--keypoint-radius KEYPOINT_RADIUS] [--connection-thickness CONNECTION_THICKNESS]
                      [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--log-file LOG_FILE]
-                     [--verbose] [--export-csv]
+                     [--verbose] [--debug-openpose] [--export-csv] [--csv-format {normalized,wide,summary,all}]
+                     [--export-all-formats] [--overlay-config OVERLAY_CONFIG]
+                     [--extract-frames] [--frame-range FRAME_RANGE] [--frames-directory FRAMES_DIRECTORY]
+                     [--extract-comprehensive-frames] [--frame-extraction-config FRAME_EXTRACTION_CONFIG]
                      input
 
 Extract OpenPose joint positions from video or image files
@@ -210,12 +163,20 @@ optional arguments:
                         Logging level (default: INFO)
   --log-file LOG_FILE   Log to file (in addition to console)
   --verbose, -v         Enable verbose logging
-  --export-csv          Also export results to CSV format
-  --extract-frames      Extract additional individual frame images beyond automatic extraction (for video inputs only)
+  --debug-openpose      Run OpenPose diagnostics and exit
+  --export-csv          Export additional CSV formats (normalized format is always generated by default)
+  --csv-format {normalized,wide,summary,all}
+                        CSV export format (default: normalized)
+  --export-all-formats  Export in all available formats (JSON, CSV variants, video overlay if applicable)
+  --overlay-config OVERLAY_CONFIG
+                        JSON file with overlay generation configuration
+  --extract-frames      Extract individual frame images with pose overlays (for video inputs only)
   --frame-range FRAME_RANGE
                         Frame range to extract (format: start:end, e.g., 10:50)
   --frames-directory FRAMES_DIRECTORY
-                        Directory to save additional extracted frame images
+                        Directory to save extracted frame images
+  --extract-comprehensive-frames
+                        Extract both raw frames and overlay frames to separate directories (for video inputs only)
   --frame-extraction-config FRAME_EXTRACTION_CONFIG
                         JSON file with frame extraction configuration
 
@@ -227,18 +188,18 @@ Additional frame extraction options are provided for custom workflows.
 
 For every video input, PoseDetect **automatically creates two separate sets of frame outputs** for comprehensive analysis:
 
-### 🎯 Output Structure
+### Output Structure
 
 ```
 outputs/
 ├── poses_20250619_131354.json              # Pose detection data
 ├── poses_20250619_131354.csv               # CSV export
-├── frames_video_20250619_131354/           # 📁 Raw frames directory (automatic)
+├── frames_video_20250619_131354/           # Raw frames directory (automatic)
 │   ├── frame_00000.jpg                     # Unprocessed frame 0
 │   ├── frame_00001.jpg                     # Unprocessed frame 1
 │   ├── frame_00002.jpg                     # Unprocessed frame 2
 │   └── ...
-├── overlay_video_20250619_131354/          # 📁 Overlay frames directory (automatic)
+├── overlay_video_20250619_131354/          # Overlay frames directory (automatic)
 │   ├── frame_00000.jpg                     # Frame 0 with pose overlays
 │   ├── frame_00001.jpg                     # Frame 1 with pose overlays
 │   ├── frame_00002.jpg                     # Frame 2 with pose overlays
@@ -246,7 +207,7 @@ outputs/
 └── video_overlay_20250619_131354.mp4       # Video overlay (if --overlay-video specified)
 ```
 
-### 🔧 Configuration Options
+### Configuration Options
 
 Create a frame extraction configuration file (`frame_config.json`):
 
@@ -283,21 +244,21 @@ Create a frame extraction configuration file (`frame_config.json`):
 }
 ```
 
-### 📋 Use Cases
+### Use Cases
 
 **Raw Frames Directory** (`frames_video_timestamp/`):
-- 🔬 **Research & Analysis**: Unmodified frames for computer vision research
-- 🎨 **Custom Processing**: Apply your own filters, annotations, or analyses
-- 📊 **Dataset Creation**: Generate training/testing datasets
-- 🔍 **Quality Control**: Manual inspection of original video content
+- **Research & Analysis**: Unmodified frames for computer vision research
+- **Custom Processing**: Apply your own filters, annotations, or analyses
+- **Dataset Creation**: Generate training/testing datasets
+- **Quality Control**: Manual inspection of original video content
 
 **Overlay Frames Directory** (`overlay_video_timestamp/`):
-- 📈 **Presentations**: High-quality individual frames for slides and reports
-- 🎯 **Pose Analysis**: Frame-by-frame examination of pose detection results
-- 🎬 **Documentation**: Create documentation with specific pose examples
-- 🔧 **Debugging**: Verify pose detection accuracy on individual frames
+- **Presentations**: High-quality individual frames for slides and reports
+- **Pose Analysis**: Frame-by-frame examination of pose detection results
+- **Documentation**: Create documentation with specific pose examples
+- **Debugging**: Verify pose detection accuracy on individual frames
 
-### 🚀 Performance Features
+### Performance Features
 
 - **Parallel Processing**: Raw and overlay extraction can run simultaneously
 - **Memory Efficient**: Frame-by-frame processing without loading entire video
@@ -305,7 +266,7 @@ Create a frame extraction configuration file (`frame_config.json`):
 - **Error Isolation**: Individual frame failures don't stop the entire process
 - **Configurable Quality**: Independent quality settings for raw vs overlay frames
 
-### 💡 Example Workflows
+### Example Workflows
 
 **Research Workflow**:
 ```bash
@@ -420,6 +381,13 @@ src/posedetect/
 │   ├── video_processor.py  # Video processing
 │   ├── output_manager.py   # Output management
 │   └── logging_config.py   # Logging configuration
+├── exporters/              # Export functionality
+│   ├── __init__.py
+│   └── csv_exporter.py     # CSV export formats
+├── video/                  # Video processing
+│   ├── __init__.py
+│   ├── frame_extraction.py # Frame extraction
+│   └── overlay_generator.py # Video overlays
 └── cli/                    # Command-line interface
     ├── __init__.py
     └── main.py             # CLI implementation
@@ -553,9 +521,6 @@ python src/video2pose.py --debug-openpose
 
 # Or run the comprehensive diagnostic tool
 python tools/diagnose_openpose.py
-
-# Or use the setup helper
-python setup_openpose.py
 ```
 
 ### Common Issues
@@ -569,9 +534,8 @@ python setup_openpose.py
    - Ensure OPENPOSEPATH environment variable is set correctly
    - Verify OpenPose Python bindings are compiled and installed
    - Run diagnostic: `python src/video2pose.py --debug-openpose`
-   - Use setup helper: `python setup_openpose.py`
 
-1.5. **DLL Load Failed (Windows)**:
+2. **DLL Load Failed (Windows)**:
    ```
    ImportError: DLL load failed: The specified module could not be found.
    ```
@@ -584,10 +548,9 @@ python setup_openpose.py
      set PATH=%PATH%;C:\path\to\openpose\bin
      ```
    - **Permanent Fix**: Add to system PATH via Environment Variables
-   - **Test Fix**: Run `python test_openpose_import.py` to verify
    - The application now automatically adds DLL paths, but manual setup may be needed
 
-2. **OPENPOSEPATH Not Set**:
+3. **OPENPOSEPATH Not Set**:
    ```
    EnvironmentError: OPENPOSEPATH environment variable not set
    ```
@@ -597,7 +560,7 @@ python setup_openpose.py
    - Linux/Mac: `export OPENPOSEPATH=/path/to/openpose`
    - Add to your shell profile for permanent setup
 
-3. **OpenPose Models Not Found**:
+4. **OpenPose Models Not Found**:
    ```
    OpenPose models folder not found
    ```
@@ -607,12 +570,12 @@ python setup_openpose.py
    - Download models from the OpenPose repository if missing
    - Check OPENPOSEPATH points to the correct directory
 
-4. **Video Processing Issues**:
+5. **Video Processing Issues**:
    - Verify video file is not corrupted
    - Check video codec compatibility with OpenCV
    - Ensure sufficient disk space for output
 
-5. **Low Detection Accuracy**:
+6. **Low Detection Accuracy**:
    - Try higher net resolution (e.g., `--net-resolution 656x368`)
    - Adjust confidence threshold (`--confidence-threshold 0.5`)
    - Ensure good lighting and video quality
@@ -634,18 +597,6 @@ Detailed analysis of your OpenPose installation including:
 - Directory structure scanning
 - Module detection and testing
 - Import testing with different configurations
-
-#### 3. Setup Helper
-```bash
-# Interactive setup
-python setup_openpose.py
-
-# Auto-detect installations
-python setup_openpose.py detect
-
-# Test current setup
-python setup_openpose.py test
-```
 
 ### Debug Mode
 
