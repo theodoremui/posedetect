@@ -13,6 +13,7 @@ from loguru import logger
 
 from ..models.pose import Pose
 from ..exporters.csv_exporter import CSVExporter, CSVFormat
+from ..exporters.json_exporter import JSONExporter, JSONFormat
 from ..video.overlay_generator import VideoOverlayGenerator, OverlayConfig
 from ..video.frame_extraction import FrameExtractionManager, FrameExtractionConfig
 
@@ -191,7 +192,8 @@ class OutputManager:
             Path to the created CSV file
         """
         if csv_path is None:
-            csv_path = self.output_path.with_suffix('.csv')
+            base_name = self.output_path.stem
+            csv_path = self.output_path.parent / f"{base_name}.csv"
         
         # This could be extended to use pandas for better CSV handling
         # For now, we'll create a simple CSV with basic pose information
@@ -235,10 +237,34 @@ class OutputManager:
         self._input_video_path = Path(video_path)
         logger.debug(f"Set input video path: {self._input_video_path}")
     
+    def _get_video_metadata(self) -> Optional[Dict[str, Any]]:
+        """
+        Get video metadata including total frames and fps.
+        
+        Returns:
+            Dictionary with video metadata or None if no video path set
+        """
+        if self._input_video_path is None:
+            return None
+        
+        try:
+            from ..utils.video_processor import VideoProcessor
+            with VideoProcessor(self._input_video_path) as video_proc:
+                metadata = video_proc.get_metadata()
+                return {
+                    'total_frames': metadata.get('frame_count', 0),
+                    'fps': metadata.get('fps', 30.0),
+                    'duration': metadata.get('duration', 0.0),
+                    'resolution': f"{metadata.get('width', 0)}x{metadata.get('height', 0)}"
+                }
+        except Exception as e:
+            logger.warning(f"Failed to get video metadata: {e}")
+            return None
+
     def export_csv_advanced(
         self, 
         csv_path: Optional[Path] = None,
-        format_type: CSVFormat = CSVFormat.NORMALIZED,
+        format_type: CSVFormat = CSVFormat.TORONTO_GAIT,
         include_metadata: bool = True
     ) -> Path:
         """
@@ -260,24 +286,37 @@ class OutputManager:
         
         if csv_path is None:
             base_name = self.output_path.stem
-            suffix = f"_{format_type.value}" if format_type != CSVFormat.NORMALIZED else ""
-            csv_path = self.output_path.parent / f"{base_name}{suffix}.csv"
+            csv_path = self.output_path.parent / f"{base_name}.csv"
+        
+        # Get video metadata for Toronto Gait format
+        video_metadata = None
+        if format_type == CSVFormat.TORONTO_GAIT:
+            video_metadata = self._get_video_metadata()
         
         csv_exporter = CSVExporter(format_type)
-        csv_exporter.export_poses(self.results, csv_path, include_metadata)
+        csv_exporter.export_poses(self.results, csv_path, include_metadata, video_metadata)
         
         logger.info(f"Exported {len(self.results)} poses to {csv_path} ({format_type.value} format)")
         return csv_path
     
-    def export_all_csv_formats(self, base_path: Optional[Path] = None) -> Dict[str, Path]:
+    def export_json_advanced(
+        self, 
+        json_path: Optional[Path] = None,
+        format_type: JSONFormat = JSONFormat.TORONTO_GAIT,
+        metadata: Optional[Dict[str, Any]] = None,
+        pretty_print: bool = True
+    ) -> Path:
         """
-        Export poses in all available CSV formats.
+        Export pose results to JSON format using the advanced JSON exporter.
         
         Args:
-            base_path: Base path for CSV files. If None, uses output_path directory
+            json_path: Optional path for JSON file. If None, uses default naming
+            format_type: JSON format type (standard, toronto_gait, or openpose)
+            metadata: Optional metadata to include in the JSON
+            pretty_print: Whether to format JSON with indentation
             
         Returns:
-            Dictionary mapping format names to file paths
+            Path to the created JSON file
             
         Raises:
             ValueError: If no poses are available to export
@@ -285,18 +324,20 @@ class OutputManager:
         if not self.results:
             raise ValueError("No poses available to export")
         
-        if base_path is None:
-            base_path = self.output_path.parent / self.output_path.stem
+        if json_path is None:
+            base_name = self.output_path.stem
+            json_path = self.output_path.parent / f"{base_name}.json"
         
-        exported_files = {}
+        # Get video metadata for Toronto Gait format
+        video_metadata = None
+        if format_type == JSONFormat.TORONTO_GAIT:
+            video_metadata = self._get_video_metadata()
         
-        for format_type in CSVFormat:
-            csv_path = base_path.parent / f"{base_path.name}_{format_type.value}.csv"
-            exported_path = self.export_csv_advanced(csv_path, format_type)
-            exported_files[format_type.value] = exported_path
+        json_exporter = JSONExporter(format_type)
+        json_exporter.export_poses(self.results, json_path, metadata, pretty_print, video_metadata)
         
-        logger.info(f"Exported poses in {len(exported_files)} CSV formats")
-        return exported_files
+        logger.info(f"Exported {len(self.results)} poses to {json_path} ({format_type.value} format)")
+        return json_path
     
     def generate_overlay_video(
         self,
@@ -487,10 +528,10 @@ class OutputManager:
         input_file: str,
         processing_metadata: Optional[Dict[str, Any]] = None,
         include_csv: bool = True,
+        include_json: bool = True,
         include_video: bool = False,
         include_frames: bool = False,
         include_comprehensive_frames: bool = False,
-        csv_formats: Optional[List[CSVFormat]] = None,
         overlay_config: Optional[OverlayConfig] = None,
         frame_config: Optional[FrameExtractionConfig] = None,
         frame_range: Optional[tuple] = None,
@@ -503,10 +544,10 @@ class OutputManager:
             input_file: Path to the input file that was processed
             processing_metadata: Optional metadata about the processing
             include_csv: Whether to generate CSV files
+            include_json: Whether to generate JSON files
             include_video: Whether to generate overlay video
             include_frames: Whether to generate individual frame overlay images
             include_comprehensive_frames: Whether to generate both raw and overlay frame directories
-            csv_formats: List of CSV formats to generate (defaults to all)
             overlay_config: Configuration for video overlay
             frame_config: Configuration for comprehensive frame extraction
             frame_range: Optional tuple (start_frame, end_frame) for frame extraction
@@ -522,28 +563,35 @@ class OutputManager:
             raise ValueError("No poses available to export")
         
         exported_files = {
-            'json': None,
+            'json': {},
             'csv': {},
             'video': None,
             'frames': [],
             'comprehensive_frames': {}
         }
         
-        # Export JSON
-        self.save_json(input_file, processing_metadata)
-        exported_files['json'] = self.output_path
+        # Export JSON files
+        if include_json:
+            try:
+                json_path = self.export_json_advanced(
+                    format_type=JSONFormat.TORONTO_GAIT,
+                    metadata=processing_metadata
+                )
+                exported_files['json']['toronto_gait'] = json_path
+            except Exception as e:
+                logger.warning(f"Failed to export JSON format: {e}")
+        else:
+            # Export main JSON file with metadata (backward compatibility)
+            self.save_json(input_file, processing_metadata)
+            exported_files['json']['standard'] = self.output_path
         
         # Export CSV formats
         if include_csv:
-            if csv_formats is None:
-                csv_formats = list(CSVFormat)
-            
-            for format_type in csv_formats:
-                try:
-                    csv_path = self.export_csv_advanced(format_type=format_type)
-                    exported_files['csv'][format_type.value] = csv_path
-                except Exception as e:
-                    logger.warning(f"Failed to export CSV format {format_type.value}: {e}")
+            try:
+                csv_path = self.export_csv_advanced(format_type=CSVFormat.TORONTO_GAIT)
+                exported_files['csv']['toronto_gait'] = csv_path
+            except Exception as e:
+                logger.warning(f"Failed to export CSV format: {e}")
         
         # Export overlay video
         if include_video:

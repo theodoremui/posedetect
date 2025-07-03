@@ -18,22 +18,50 @@ logger = logging.getLogger(__name__)
 
 class CSVFormat(Enum):
     """Supported CSV output formats."""
-    NORMALIZED = "normalized"  # One row per joint detection
-    WIDE = "wide"             # One row per frame, joints as columns
-    SUMMARY = "summary"       # One row per person per frame
+    TORONTO_GAIT = "toronto_gait"  # Toronto Older Adults Gait Archive format
+
+
+# Mapping from COCO joint names to Toronto Gait Archive naming convention
+TORONTO_GAIT_JOINT_MAPPING = {
+    "nose": "Nose",
+    "left_eye": "LEye", 
+    "right_eye": "REye",
+    "left_ear": "LEar",
+    "right_ear": "REar",
+    "left_shoulder": "LShoulder",
+    "right_shoulder": "RShoulder",
+    "left_elbow": "LElbow",
+    "right_elbow": "RElbow",
+    "left_wrist": "LWrist",
+    "right_wrist": "RWrist",
+    "left_hip": "LHip",
+    "right_hip": "RHip",
+    "left_knee": "LKnee",
+    "right_knee": "RKnee",
+    "left_ankle": "LAnkle",
+    "right_ankle": "RAnkle"
+}
+
+# Expected order for Toronto Gait Archive format (COCO order)
+TORONTO_GAIT_JOINT_ORDER = [
+    "Nose", "LEye", "REye", "LEar", "REar",
+    "LShoulder", "RShoulder", "LElbow", "RElbow", 
+    "LWrist", "RWrist", "LHip", "RHip",
+    "LKnee", "RKnee", "LAnkle", "RAnkle"
+]
 
 
 class CSVExporter:
     """
     Export pose detection data to CSV format.
     
-    Supports multiple CSV layouts:
-    - Normalized: One row per joint detection (best for analysis)
-    - Wide: One row per frame with all joints as columns (compact)
-    - Summary: One row per person per frame with aggregate stats
+    Exports data in Toronto Older Adults Gait Archive format:
+    - One row per frame with all joints as columns in COCO order
+    - Missing joints are filled with 0,0,0
+    - Includes ALL frames from video, even those without poses
     """
     
-    def __init__(self, format_type: CSVFormat = CSVFormat.NORMALIZED):
+    def __init__(self, format_type: CSVFormat = CSVFormat.TORONTO_GAIT):
         """
         Initialize CSV exporter.
         
@@ -47,7 +75,8 @@ class CSVExporter:
         self, 
         poses: List[Pose], 
         output_path: Union[str, Path],
-        include_metadata: bool = True
+        include_metadata: bool = True,
+        video_metadata: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Export poses to CSV file.
@@ -56,6 +85,7 @@ class CSVExporter:
             poses: List of pose objects to export
             output_path: Path where CSV file will be saved
             include_metadata: Whether to include metadata in the CSV
+            video_metadata: Optional video metadata (total_frames, fps) for Toronto Gait format
             
         Raises:
             ValueError: If poses list is empty or invalid
@@ -67,12 +97,8 @@ class CSVExporter:
         output_path = Path(output_path)
         
         try:
-            if self.format_type == CSVFormat.NORMALIZED:
-                self._export_normalized(poses, output_path, include_metadata)
-            elif self.format_type == CSVFormat.WIDE:
-                self._export_wide(poses, output_path, include_metadata)
-            elif self.format_type == CSVFormat.SUMMARY:
-                self._export_summary(poses, output_path, include_metadata)
+            if self.format_type == CSVFormat.TORONTO_GAIT:
+                self._export_toronto_gait(poses, output_path, include_metadata, video_metadata)
             else:
                 raise ValueError(f"Unsupported CSV format: {self.format_type}")
                 
@@ -82,173 +108,104 @@ class CSVExporter:
             self.logger.error(f"Failed to export CSV to {output_path}: {e}")
             raise
 
-    def _export_normalized(
+    def _export_toronto_gait(
         self, 
         poses: List[Pose], 
         output_path: Path,
-        include_metadata: bool
+        include_metadata: bool,
+        video_metadata: Optional[Dict[str, Any]] = None
     ) -> None:
         """
-        Export in normalized format: one row per joint detection.
+        Export in Toronto Older Adults Gait Archive format.
         
-        Columns: frame_number, timestamp, person_id, joint_name, joint_id, 
-                x, y, confidence, pose_confidence
+        Format: time,Nose_x,Nose_y,Nose_conf,LEye_x,LEye_y,LEye_conf,...
+        One row per frame with all joints as columns in COCO order.
+        Missing joints are filled with 0,0,0.
+        
+        For Toronto Gait format, ALL frames from the video are included,
+        even those where no pose was detected.
         """
-        fieldnames = [
-            'frame_number', 'timestamp', 'person_id', 'joint_name', 
-            'joint_id', 'x', 'y', 'confidence'
-        ]
-        
-        if include_metadata:
-            fieldnames.extend(['pose_confidence', 'total_joints'])
-        
-        with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for pose in poses:
-                base_row = {
-                    'frame_number': getattr(pose, 'frame_number', ''),
-                    'timestamp': getattr(pose, 'timestamp', ''),
-                    'person_id': pose.person_id,
-                }
-                
-                if include_metadata:
-                    base_row.update({
-                        'pose_confidence': pose.confidence,
-                        'total_joints': len(pose.joints)
-                    })
-                
-                for joint in pose.joints:
-                    row = base_row.copy()
-                    row.update({
-                        'joint_name': joint.name,
-                        'joint_id': joint.joint_id,
-                        'x': joint.keypoint.x,
-                        'y': joint.keypoint.y,
-                        'confidence': joint.keypoint.confidence
-                    })
-                    writer.writerow(row)
-
-    def _export_wide(
-        self, 
-        poses: List[Pose], 
-        output_path: Path,
-        include_metadata: bool
-    ) -> None:
-        """
-        Export in wide format: one row per frame, joints as columns.
-        
-        Dynamically creates columns based on available joints.
-        """
-        # Collect all unique joint names across all poses
-        all_joint_names = set()
-        for pose in poses:
-            for joint in pose.joints:
-                all_joint_names.add(joint.name)
-        
-        sorted_joint_names = sorted(all_joint_names)
-        
-        # Build fieldnames
-        fieldnames = ['frame_number', 'timestamp', 'person_id']
-        
-        if include_metadata:
-            fieldnames.extend(['pose_confidence', 'total_joints'])
-        
-        # Add columns for each joint (x, y, confidence)
-        for joint_name in sorted_joint_names:
+        # Build header row
+        fieldnames = ["time"]
+        for joint_name in TORONTO_GAIT_JOINT_ORDER:
             fieldnames.extend([
-                f'{joint_name}_x',
-                f'{joint_name}_y', 
-                f'{joint_name}_confidence'
+                f"{joint_name}_x",
+                f"{joint_name}_y", 
+                f"{joint_name}_conf"
             ])
         
         with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             
-            for pose in poses:
-                row = {
-                    'frame_number': getattr(pose, 'frame_number', ''),
-                    'timestamp': getattr(pose, 'timestamp', ''),
-                    'person_id': pose.person_id,
-                }
+            # Group poses by frame for lookup
+            poses_by_frame = self._group_poses_by_frame(poses)
+            
+            # Determine total frames and fps from video metadata or poses
+            total_frames = 0
+            fps = 30.0  # Default fps
+            
+            if video_metadata:
+                total_frames = video_metadata.get('total_frames', 0)
+                fps = video_metadata.get('fps', 30.0)
+            
+            # If no video metadata, use the maximum frame number from poses
+            if total_frames == 0 and poses:
+                max_frame = max(getattr(pose, 'frame_number', 0) for pose in poses)
+                total_frames = max_frame + 1
+            
+            # Generate rows for ALL frames (0 to total_frames-1)
+            for frame_number in range(total_frames):
+                timestamp = frame_number / fps
                 
-                if include_metadata:
-                    row.update({
-                        'pose_confidence': pose.confidence,
-                        'total_joints': len(pose.joints)
-                    })
-                
-                # Initialize all joint columns with empty values
-                for joint_name in sorted_joint_names:
-                    row[f'{joint_name}_x'] = ''
-                    row[f'{joint_name}_y'] = ''
-                    row[f'{joint_name}_confidence'] = ''
-                
-                # Fill in available joint data
-                for joint in pose.joints:
-                    joint_name = joint.name
-                    row[f'{joint_name}_x'] = joint.keypoint.x
-                    row[f'{joint_name}_y'] = joint.keypoint.y
-                    row[f'{joint_name}_confidence'] = joint.keypoint.confidence
+                if frame_number in poses_by_frame:
+                    # Frame has detected poses - use the first one (primary person)
+                    # For multi-person scenarios, we could create multiple rows or average
+                    pose = poses_by_frame[frame_number][0]  # Use first detected person
+                    
+                    row = {"time": timestamp}
+                    
+                    # Initialize all joints with 0,0,0
+                    for joint_name in TORONTO_GAIT_JOINT_ORDER:
+                        row[f"{joint_name}_x"] = 0
+                        row[f"{joint_name}_y"] = 0
+                        row[f"{joint_name}_conf"] = 0
+                    
+                    # Fill in available joint data
+                    for joint in pose.joints:
+                        toronto_name = TORONTO_GAIT_JOINT_MAPPING.get(joint.name)
+                        if toronto_name:
+                            row[f"{toronto_name}_x"] = joint.keypoint.x
+                            row[f"{toronto_name}_y"] = joint.keypoint.y
+                            row[f"{toronto_name}_conf"] = joint.keypoint.confidence
+                else:
+                    # Frame has no detected poses - fill with all zeros
+                    row = {"time": timestamp}
+                    
+                    for joint_name in TORONTO_GAIT_JOINT_ORDER:
+                        row[f"{joint_name}_x"] = 0
+                        row[f"{joint_name}_y"] = 0
+                        row[f"{joint_name}_conf"] = 0
                 
                 writer.writerow(row)
 
-    def _export_summary(
-        self, 
-        poses: List[Pose], 
-        output_path: Path,
-        include_metadata: bool
-    ) -> None:
+    def _group_poses_by_frame(self, poses: List[Pose]) -> Dict[int, List[Pose]]:
         """
-        Export in summary format: one row per person per frame with stats.
+        Group poses by frame number.
         
-        Includes aggregate statistics like average confidence, joint counts, etc.
-        """
-        fieldnames = [
-            'frame_number', 'timestamp', 'person_id', 'total_joints',
-            'valid_joints', 'avg_confidence', 'max_confidence', 'min_confidence',
-            'pose_confidence'
-        ]
-        
-        if include_metadata:
-            # Add bounding box info if available
-            fieldnames.extend(['bbox_left', 'bbox_top', 'bbox_right', 'bbox_bottom'])
-        
-        with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+        Args:
+            poses: List of poses to group
             
-            for pose in poses:
-                # Calculate statistics
-                confidences = [joint.keypoint.confidence for joint in pose.joints]
-                valid_joints = len([c for c in confidences if c > 0])
-                
-                # Calculate bounding box
-                bbox = self._calculate_bounding_box(pose)
-                
-                row = {
-                    'frame_number': getattr(pose, 'frame_number', ''),
-                    'timestamp': getattr(pose, 'timestamp', ''),
-                    'person_id': pose.person_id,
-                    'total_joints': len(pose.joints),
-                    'valid_joints': valid_joints,
-                    'avg_confidence': sum(confidences) / len(confidences) if confidences else 0,
-                    'max_confidence': max(confidences) if confidences else 0,
-                    'min_confidence': min(confidences) if confidences else 0,
-                    'pose_confidence': pose.confidence
-                }
-                
-                if include_metadata and bbox:
-                    row.update({
-                        'bbox_left': bbox['left'],
-                        'bbox_top': bbox['top'], 
-                        'bbox_right': bbox['right'],
-                        'bbox_bottom': bbox['bottom']
-                    })
-                
-                writer.writerow(row)
+        Returns:
+            Dictionary mapping frame numbers to lists of poses
+        """
+        poses_by_frame = {}
+        for pose in poses:
+            frame_number = getattr(pose, 'frame_number', 0)
+            if frame_number not in poses_by_frame:
+                poses_by_frame[frame_number] = []
+            poses_by_frame[frame_number].append(pose)
+        return poses_by_frame
 
     def _calculate_bounding_box(self, pose: Pose) -> Optional[Dict[str, float]]:
         """

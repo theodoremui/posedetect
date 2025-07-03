@@ -56,35 +56,28 @@ def demonstrate_csv_export():
     
     poses = create_sample_poses()
     
-    # Demonstrate different CSV formats
-    formats_to_test = [
-        (CSVFormat.NORMALIZED, "Normalized format - one row per joint"),
-        (CSVFormat.WIDE, "Wide format - one row per pose, joints as columns"),
-        (CSVFormat.SUMMARY, "Summary format - aggregate statistics per pose")
-    ]
+    # Demonstrate Toronto Gait CSV format
+    print(f"\n📊 Toronto Gait format - research standard with all frames")
+    exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
+    output_path = Path(f"example_output_toronto_gait.csv")
     
-    for csv_format, description in formats_to_test:
-        print(f"\n📊 {description}")
-        exporter = CSVExporter(csv_format)
-        output_path = Path(f"example_output_{csv_format.value}.csv")
+    try:
+        exporter.export_poses(poses, output_path, include_metadata=True)
+        print(f"✅ Successfully exported to: {output_path}")
         
-        try:
-            exporter.export_poses(poses, output_path, include_metadata=True)
-            print(f"✅ Successfully exported to: {output_path}")
-            
-            # Show first few lines of the CSV
-            with open(output_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()[:4]  # Show header + 3 data lines
-                print("📄 Sample content:")
-                for line in lines:
-                    print(f"   {line.strip()}")
-                if len(lines) < len(poses) * 2:  # Rough estimate
-                    print("   ... (more rows)")
-                    
-        except Exception as e:
-            print(f"❌ Export failed: {e}")
-        
-        print()
+        # Show first few lines of the CSV
+        with open(output_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()[:4]  # Show header + 3 data lines
+            print("📄 Sample content:")
+            for line in lines:
+                print(f"   {line.strip()}")
+            if len(lines) < len(poses) * 2:  # Rough estimate
+                print("   ... (more rows)")
+                
+    except Exception as e:
+        print(f"❌ Export failed: {e}")
+    
+    print()
 
 
 def demonstrate_output_manager():
@@ -106,13 +99,11 @@ def demonstrate_output_manager():
     print(f"   Available CSV formats: {summary['available_csv_formats']}")
     print(f"   Video overlay supported: {summary['video_overlay_supported']}")
     
-    # Export all CSV formats
-    print("\n📊 Exporting all CSV formats...")
+    # Export CSV format
+    print("\n📊 Exporting CSV format...")
     try:
-        csv_files = manager.export_all_csv_formats()
-        print(f"✅ Successfully exported {len(csv_files)} CSV formats:")
-        for format_name, file_path in csv_files.items():
-            print(f"   - {format_name}: {file_path}")
+        csv_file = manager.export_csv_advanced()
+        print(f"✅ Successfully exported CSV: {csv_file}")
     except Exception as e:
         print(f"❌ CSV export failed: {e}")
     
@@ -175,14 +166,14 @@ def main():
         print("\n🎉 All demonstrations completed successfully!")
         print("\n📚 Usage Summary:")
         print("=" * 30)
-        print("1. CSV Export: Use CSVExporter with different formats")
-        print("2. Output Manager: Coordinate multi-format exports")
+        print("1. CSV Export: Uses Toronto Gait format for research compatibility")
+        print("2. Output Manager: Coordinates Toronto Gait exports")
         print("3. Video Overlay: Configure visualization with OverlayConfig")
         print("4. CLI: Use --export-all-formats for complete export")
         
         print("\n💡 Next Steps:")
         print("- Run: python -m src.posedetect.cli.main --help")
-        print("- Try: --export-csv --csv-format all")
+        print("- Try: --export-csv for Toronto Gait CSV export")
         print("- Try: --export-all-formats for complete export")
         
     except Exception as e:

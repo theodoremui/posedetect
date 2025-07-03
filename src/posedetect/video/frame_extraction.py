@@ -252,6 +252,12 @@ class RawFrameExtractor(IFrameExtractor):
                     frame_count += 1
                     continue
                 
+                # Skip frames with no valid poses if valid_frames set is provided
+                valid_frames = kwargs.get('valid_frames')
+                if valid_frames is not None and frame_count not in valid_frames:
+                    frame_count += 1
+                    continue
+                
                 # Apply resize if configured
                 if config.raw_resize_factor:
                     new_width = int(width * config.raw_resize_factor)
@@ -441,6 +447,11 @@ class OverlayFrameExtractor(IFrameExtractor):
                 
                 # Get poses for this frame
                 frame_poses = poses_by_frame.get(frame_count, [])
+                
+                # Skip frames with no poses (since poses are already filtered for valid detections)
+                if not frame_poses:
+                    frame_count += 1
+                    continue
                 
                 # Draw poses on frame
                 overlay_frame = self._draw_poses_on_frame(frame, frame_poses, config)
@@ -727,6 +738,13 @@ class FrameExtractionManager:
             'directories': directories
         }
         
+        # Determine valid frames from poses (frames that contain valid pose detections)
+        valid_frames = None
+        if poses:
+            from ..utils.pose_filter import get_frames_with_valid_poses
+            valid_frames = get_frames_with_valid_poses(poses)
+            self.logger.info(f"Found {len(valid_frames)} frames with valid poses")
+        
         # Extract raw frames if configured
         if self.config.extract_raw_frames:
             self.logger.info("Starting raw frame extraction...")
@@ -742,7 +760,8 @@ class FrameExtractionManager:
                     video_path=video_path,
                     output_directory=directories['raw'],
                     config=self.config,
-                    progress_callback=raw_progress_callback if self.config.enable_progress_callback else None
+                    progress_callback=raw_progress_callback if self.config.enable_progress_callback else None,
+                    valid_frames=valid_frames  # Pass valid frames to skip frames with no poses
                 )
                 results['raw_frames'] = raw_frames
                 self.logger.info(f"Extracted {len(raw_frames)} raw frames")

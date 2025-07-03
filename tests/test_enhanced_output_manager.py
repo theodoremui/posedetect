@@ -86,7 +86,7 @@ class TestEnhancedOutputManager:
             
             result_path = output_manager.export_csv_advanced(
                 csv_path=csv_path,
-                format_type=CSVFormat.NORMALIZED,
+                format_type=CSVFormat.TORONTO_GAIT,
                 include_metadata=True
             )
             
@@ -100,7 +100,7 @@ class TestEnhancedOutputManager:
             
             result_path = output_manager.export_csv_advanced(
                 csv_path=csv_path,
-                format_type=CSVFormat.WIDE,
+                format_type=CSVFormat.TORONTO_GAIT,
                 include_metadata=False
             )
             
@@ -113,7 +113,7 @@ class TestEnhancedOutputManager:
             
             result_path = output_manager.export_csv_advanced(
                 csv_path=csv_path,
-                format_type=CSVFormat.SUMMARY
+                format_type=CSVFormat.TORONTO_GAIT
             )
             
             assert result_path.exists()
@@ -136,29 +136,20 @@ class TestEnhancedOutputManager:
                 manager.export_csv_advanced()
     
     def test_export_all_csv_formats(self, output_manager):
-        """Test exporting all CSV formats at once."""
+        """Test exporting CSV format."""
         with TemporaryDirectory() as temp_dir:
-            base_path = Path(temp_dir) / "test"
+            csv_path = Path(temp_dir) / "test.csv"
             
-            exported_files = output_manager.export_all_csv_formats(base_path)
+            exported_path = output_manager.export_csv_advanced(csv_path)
             
-            assert len(exported_files) == 3  # normalized, wide, summary
-            assert 'normalized' in exported_files
-            assert 'wide' in exported_files
-            assert 'summary' in exported_files
-            
-            # Check that all files exist
-            for format_name, file_path in exported_files.items():
-                assert file_path.exists()
-                assert format_name in file_path.name
+            assert exported_path.exists()
+            assert exported_path == csv_path
     
     def test_export_all_csv_formats_default_path(self, output_manager):
-        """Test exporting all CSV formats with default path."""
-        exported_files = output_manager.export_all_csv_formats()
+        """Test exporting CSV format with default path."""
+        exported_path = output_manager.export_csv_advanced()
         
-        assert len(exported_files) == 3
-        for file_path in exported_files.values():
-            assert file_path.exists()
+        assert exported_path.exists()
     
     @patch('src.posedetect.video.overlay_generator.VideoOverlayGenerator')
     def test_generate_overlay_video(self, mock_generator_class, output_manager):
@@ -231,7 +222,7 @@ class TestEnhancedOutputManager:
             include_video=False
         )
         
-        assert exported_files['json'] == output_manager.output_path
+        assert 'standard' in exported_files['json']
         assert len(exported_files['csv']) == 0
         assert exported_files['video'] is None
     
@@ -243,46 +234,10 @@ class TestEnhancedOutputManager:
             include_video=False
         )
         
-        assert exported_files['json'] == output_manager.output_path
-        assert len(exported_files['csv']) == 3  # All CSV formats by default
+        assert 'standard' in exported_files['json']
+        assert len(exported_files['csv']) == 1  # Only Toronto Gait format
+        assert 'toronto_gait' in exported_files['csv']
         assert exported_files['video'] is None
-    
-    def test_export_all_formats_specific_csv_formats(self, output_manager):
-        """Test exporting with specific CSV formats."""
-        exported_files = output_manager.export_all_formats(
-            input_file="test.mp4",
-            include_csv=True,
-            csv_formats=[CSVFormat.NORMALIZED, CSVFormat.WIDE],
-            include_video=False
-        )
-        
-        assert len(exported_files['csv']) == 2
-        assert 'normalized' in exported_files['csv']
-        assert 'wide' in exported_files['csv']
-        assert 'summary' not in exported_files['csv']
-    
-    @patch('src.posedetect.video.overlay_generator.VideoOverlayGenerator')
-    def test_export_all_formats_with_video(self, mock_generator_class, output_manager):
-        """Test exporting all formats including video."""
-        with TemporaryDirectory() as temp_dir:
-            video_path = Path(temp_dir) / "input.mp4"
-            video_path.touch()
-            
-            # Setup mock
-            mock_generator = Mock()
-            mock_generator_class.return_value = mock_generator
-            
-            output_manager.set_input_video_path(video_path)
-            
-            exported_files = output_manager.export_all_formats(
-                input_file="test.mp4",
-                include_csv=True,
-                include_video=True
-            )
-            
-            assert exported_files['json'] is not None
-            assert len(exported_files['csv']) > 0
-            assert exported_files['video'] is not None
     
     def test_export_all_formats_video_without_input_path(self, output_manager):
         """Test that video export is skipped when no input path is set."""

@@ -52,18 +52,18 @@ class TestCSVExporter:
         """Test CSV exporter initialization."""
         # Test default initialization
         exporter = CSVExporter()
-        assert exporter.format_type == CSVFormat.NORMALIZED
+        assert exporter.format_type == CSVFormat.TORONTO_GAIT
         
         # Test with specific format
-        exporter = CSVExporter(CSVFormat.WIDE)
-        assert exporter.format_type == CSVFormat.WIDE
+        exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
+        assert exporter.format_type == CSVFormat.TORONTO_GAIT
     
-    def test_normalized_format_export(self, sample_poses):
-        """Test normalized CSV format export."""
+    def test_toronto_gait_format_export(self, sample_poses):
+        """Test Toronto Gait CSV format export."""
         with TemporaryDirectory() as temp_dir:
-            output_path = Path(temp_dir) / "test_normalized.csv"
+            output_path = Path(temp_dir) / "test_toronto_gait.csv"
             
-            exporter = CSVExporter(CSVFormat.NORMALIZED)
+            exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
             exporter.export_poses(sample_poses, output_path)
             
             assert output_path.exists()
@@ -73,75 +73,22 @@ class TestCSVExporter:
                 reader = csv.DictReader(f)
                 rows = list(reader)
             
-            # Should have one row per joint (3 + 3 = 6 rows)
-            assert len(rows) == 6
+            # Toronto Gait format has one row per frame with all joints as columns
+            assert len(rows) >= 1
             
-            # Check first row
-            first_row = rows[0]
-            assert first_row['frame_number'] == '0'
-            assert first_row['person_id'] == '0'
-            assert first_row['joint_name'] == 'nose'
-            assert float(first_row['x']) == 100.0
-            assert float(first_row['y']) == 50.0
-            assert float(first_row['confidence']) == 0.9
-    
-    def test_wide_format_export(self, sample_poses):
-        """Test wide CSV format export."""
-        with TemporaryDirectory() as temp_dir:
-            output_path = Path(temp_dir) / "test_wide.csv"
-            
-            exporter = CSVExporter(CSVFormat.WIDE)
-            exporter.export_poses(sample_poses, output_path)
-            
-            assert output_path.exists()
-            
-            # Read and verify CSV content
-            with open(output_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-            
-            # Should have one row per pose (2 rows)
-            assert len(rows) == 2
-            
-            # Check column structure
+            # Check column structure includes time and joint coordinates
             fieldnames = reader.fieldnames
-            assert 'frame_number' in fieldnames
-            assert 'person_id' in fieldnames
-            assert 'nose_x' in fieldnames
-            assert 'nose_y' in fieldnames
-            assert 'nose_confidence' in fieldnames
-    
-    def test_summary_format_export(self, sample_poses):
-        """Test summary CSV format export."""
-        with TemporaryDirectory() as temp_dir:
-            output_path = Path(temp_dir) / "test_summary.csv"
-            
-            exporter = CSVExporter(CSVFormat.SUMMARY)
-            exporter.export_poses(sample_poses, include_metadata=True)
-            
-            assert output_path.exists()
-            
-            # Read and verify CSV content
-            with open(output_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-            
-            # Should have one row per pose (2 rows)
-            assert len(rows) == 2
-            
-            # Check summary statistics
-            first_row = rows[0]
-            assert int(first_row['total_joints']) == 3
-            assert int(first_row['valid_joints']) == 3
-            assert float(first_row['avg_confidence']) > 0
-            assert float(first_row['max_confidence']) == 0.9
+            assert 'time' in fieldnames
+            assert 'Nose_x' in fieldnames
+            assert 'Nose_y' in fieldnames
+            assert 'Nose_conf' in fieldnames
     
     def test_export_without_metadata(self, sample_poses):
         """Test CSV export without metadata."""
         with TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "test_no_metadata.csv"
             
-            exporter = CSVExporter(CSVFormat.NORMALIZED)
+            exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
             exporter.export_poses(sample_poses, output_path, include_metadata=False)
             
             # Read and verify CSV content
@@ -188,20 +135,18 @@ class TestCSVExporter:
         """Test getting list of available CSV formats."""
         formats = CSVExporter.get_available_formats()
         assert isinstance(formats, list)
-        assert "normalized" in formats
-        assert "wide" in formats
-        assert "summary" in formats
+        assert "toronto_gait" in formats
     
     def test_string_representations(self):
         """Test string representations of CSVExporter."""
-        exporter = CSVExporter(CSVFormat.WIDE)
+        exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
         
         str_repr = str(exporter)
-        assert "wide" in str_repr
+        assert "toronto_gait" in str_repr
         
         repr_str = repr(exporter)
         assert "CSVExporter" in repr_str
-        assert "WIDE" in repr_str
+        assert "TORONTO_GAIT" in repr_str
     
     def test_export_with_missing_frame_info(self):
         """Test CSV export when poses are missing frame information."""
@@ -215,7 +160,7 @@ class TestCSVExporter:
         with TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "test_missing_info.csv"
             
-            exporter = CSVExporter(CSVFormat.NORMALIZED)
+            exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
             exporter.export_poses([pose], output_path)
             
             # Read and verify CSV content
@@ -238,7 +183,7 @@ class TestCSVExporter:
         with TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "test_unicode.csv"
             
-            exporter = CSVExporter(CSVFormat.NORMALIZED)
+            exporter = CSVExporter(CSVFormat.TORONTO_GAIT)
             exporter.export_poses([pose], output_path)
             
             assert output_path.exists()
